@@ -145,7 +145,7 @@ export default function AdminDashboard() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs uppercase tracking-wider text-gray-400 font-bold mb-1">Price ($)</label>
+                <label className="block text-xs uppercase tracking-wider text-gray-400 font-bold mb-1">Price (₹)</label>
                 <input type="number" step="0.01" placeholder="14.50" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} className="w-full bg-gray-950 border border-gray-800 rounded-lg p-3 text-white focus:outline-none focus:border-orange-500 text-lg" />
               </div>
               <div>
@@ -242,7 +242,7 @@ export default function AdminDashboard() {
                 </div>
                 <form onSubmit={handleAddMenuItem} className="space-y-3">
                   <input type="text" placeholder="Item Name" value={newItem.item_name} onChange={e => setNewItem({...newItem, item_name: e.target.value})} className="w-full bg-gray-950 border border-gray-800 rounded p-2 text-sm text-white focus:outline-none focus:border-orange-500" />
-                  <input type="number" step="0.01" placeholder="Price ($)" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} className="w-full bg-gray-950 border border-gray-800 rounded p-2 text-sm text-white focus:outline-none focus:border-orange-500" />
+                  <input type="number" step="0.01" placeholder="Price (₹)" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} className="w-full bg-gray-950 border border-gray-800 rounded p-2 text-sm text-white focus:outline-none focus:border-orange-500" />
                   <button type="submit" className="w-full py-2 bg-orange-600 hover:bg-orange-700 text-white rounded text-sm font-bold transition">Quick Add</button>
                 </form>
               </section>
@@ -280,7 +280,7 @@ export default function AdminDashboard() {
                     <div key={order.id} className="p-3 bg-gray-950 rounded border border-gray-800 text-xs text-gray-400">
                       <div className="flex justify-between font-bold mb-1 text-gray-300">
                         <span>{order.customers?.name}</span>
-                        <span className="text-emerald-500">${order.total_price}</span>
+                        <span className="text-emerald-500">₹{order.total_price}</span>
                       </div>
                       <p className="text-gray-500 font-mono">{order.customers?.phone_number}</p>
                       <p className="text-[10px] text-gray-600 mt-0.5 mb-2">Done at: {timeString} • {dateString}</p>
@@ -330,7 +330,7 @@ function OrderCard({ order, onUpdate }) {
           {order.items?.map((item, index) => (
             <li key={index} className="flex justify-between">
               <span>• {item.qty}x <span className="text-orange-300 font-medium">{item.item_name}</span></span>
-              <span className="text-gray-500">${(item.unit_price * item.qty).toFixed(2)}</span>
+              <span className="text-gray-500">₹{(item.unit_price * item.qty).toFixed(2)}</span>
             </li>
           ))}
         </ul>
@@ -339,7 +339,7 @@ function OrderCard({ order, onUpdate }) {
       <div className="mt-4 flex items-center justify-between">
         <div>
           <span className="text-xs text-gray-500 block uppercase font-bold tracking-wider">Total due</span>
-          <span className="text-xl font-black text-emerald-400">${order.total_price}</span>
+          <span className="text-xl font-black text-emerald-400">₹{order.total_price}</span>
         </div>
         <div>
           {order.status === 'pending' && (
