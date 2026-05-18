@@ -6,6 +6,7 @@ export default function AdminDashboard() {
   const [orders, setOrders] = useState([]);
   const [reservations, setReservations] = useState([]);
   const [feedback, setFeedback] = useState([]);
+  const [menu, setMenu] = useState([]);
   const [newItem, setNewItem] = useState({ item_name: '', description: '', price: '', category: 'Main' });
   const [isRefreshing, setIsRefreshing] = useState(false);
   
@@ -48,10 +49,12 @@ export default function AdminDashboard() {
     const { data: orderData } = await supabase.from('orders').select('*, customers(name, phone_number)').order('created_at', { ascending: false });
     const { data: resData } = await supabase.from('reservations').select('*, customers(name, phone_number)').order('reservation_date', { ascending: true });
     const { data: feedData } = await supabase.from('feedback').select('*, customers(name)').order('created_at', { ascending: false });
+    const { data: menuData } = await supabase.from('menu').select('*').order('category', { ascending: true });
 
     if (orderData) setOrders(orderData);
     if (resData) setReservations(resData);
     if (feedData) setFeedback(feedData);
+    if (menuData) setMenu(menuData);
   }
 
   async function updateOrderStatus(orderId, newStatus) {
@@ -62,17 +65,35 @@ export default function AdminDashboard() {
   async function handleAddMenuItem(e) {
     e.preventDefault();
     if (!newItem.item_name || !newItem.price) return alert('Please enter item name and price.');
+    
+    const payload = { 
+      item_name: newItem.item_name, 
+      description: newItem.description, 
+      price: parseFloat(newItem.price), 
+      category: newItem.category 
+    };
 
-    const { error } = await supabase.from('menu').insert([
-      { item_name: newItem.item_name, description: newItem.description, price: parseFloat(newItem.price), category: newItem.category }
-    ]);
+    let error;
+    if (newItem.id) {
+      ({ error } = await supabase.from('menu').update(payload).eq('id', newItem.id));
+    } else {
+      ({ error } = await supabase.from('menu').insert([payload]));
+    }
 
     if (error) {
       alert(error.message);
     } else {
-      alert(`🎉 "${newItem.item_name}" is now live for the AI bot!`);
+      alert(newItem.id ? `Updated "${newItem.item_name}"` : `🎉 "${newItem.item_name}" is now live!`);
       setNewItem({ item_name: '', description: '', price: '', category: 'Main' });
+      fetchInitialData();
     }
+  }
+
+  async function deleteMenuItem(id) {
+    if (!confirm('Are you sure you want to delete this item?')) return;
+    const { error } = await supabase.from('menu').delete().eq('id', id);
+    if (error) alert(error.message);
+    else fetchInitialData();
   }
 
   // Filter systems
@@ -132,33 +153,66 @@ export default function AdminDashboard() {
 
       {/* --- RENDER 2: FULL SCREEN EXPAND LIVE MENU FOCUS --- */}
       {activeView === 'menu_focus' && (
-        <div className="max-w-2xl mx-auto bg-gray-900 p-8 rounded-2xl border border-gray-800 animate-fadeIn">
-          <h2 className="text-2xl font-black text-orange-400 mb-6">➕ Expand Live Menu (Full View)</h2>
-          <form onSubmit={handleAddMenuItem} className="space-y-5">
-            <div>
-              <label className="block text-xs uppercase tracking-wider text-gray-400 font-bold mb-1">Item Name</label>
-              <input type="text" placeholder="e.g. Truffle Burger" value={newItem.item_name} onChange={e => setNewItem({...newItem, item_name: e.target.value})} className="w-full bg-gray-950 border border-gray-800 rounded-lg p-3 text-white focus:outline-none focus:border-orange-500 text-lg" />
-            </div>
-            <div>
-              <label className="block text-xs uppercase tracking-wider text-gray-400 font-bold mb-1">Description</label>
-              <textarea rows="3" placeholder="Description of choice ingredients..." value={newItem.description} onChange={e => setNewItem({...newItem, description: e.target.value})} className="w-full bg-gray-950 border border-gray-800 rounded-lg p-3 text-white focus:outline-none focus:border-orange-500" />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
+        <div className="max-w-4xl mx-auto space-y-8 animate-fadeIn">
+          <div className="bg-gray-900 p-8 rounded-2xl border border-gray-800">
+            <h2 className="text-2xl font-black text-orange-400 mb-6">
+              {newItem.id ? '✏️ Edit Menu Item' : '➕ Expand Live Menu (Full View)'}
+            </h2>
+            <form onSubmit={handleAddMenuItem} className="space-y-5">
               <div>
-                <label className="block text-xs uppercase tracking-wider text-gray-400 font-bold mb-1">Price (₹)</label>
-                <input type="number" step="0.01" placeholder="14.50" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} className="w-full bg-gray-950 border border-gray-800 rounded-lg p-3 text-white focus:outline-none focus:border-orange-500 text-lg" />
+                <label className="block text-xs uppercase tracking-wider text-gray-400 font-bold mb-1">Item Name</label>
+                <input type="text" placeholder="e.g. Truffle Burger" value={newItem.item_name} onChange={e => setNewItem({...newItem, item_name: e.target.value})} className="w-full bg-gray-950 border border-gray-800 rounded-lg p-3 text-white focus:outline-none focus:border-orange-500 text-lg" />
               </div>
               <div>
-                <label className="block text-xs uppercase tracking-wider text-gray-400 font-bold mb-1">Category</label>
-                <select value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})} className="w-full bg-gray-950 border border-gray-800 rounded-lg p-3 text-white focus:outline-none focus:border-orange-500 text-lg">
-                  <option value="Main">Main</option>
-                  <option value="Appetizer">Appetizer</option>
-                  <option value="Drink">Drink</option>
-                </select>
+                <label className="block text-xs uppercase tracking-wider text-gray-400 font-bold mb-1">Description</label>
+                <textarea rows="3" placeholder="Description of choice ingredients..." value={newItem.description} onChange={e => setNewItem({...newItem, description: e.target.value})} className="w-full bg-gray-950 border border-gray-800 rounded-lg p-3 text-white focus:outline-none focus:border-orange-500" />
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs uppercase tracking-wider text-gray-400 font-bold mb-1">Price (₹)</label>
+                  <input type="number" step="0.01" placeholder="14.50" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} className="w-full bg-gray-950 border border-gray-800 rounded-lg p-3 text-white focus:outline-none focus:border-orange-500 text-lg" />
+                </div>
+                <div>
+                  <label className="block text-xs uppercase tracking-wider text-gray-400 font-bold mb-1">Category</label>
+                  <select value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})} className="w-full bg-gray-950 border border-gray-800 rounded-lg p-3 text-white focus:outline-none focus:border-orange-500 text-lg">
+                    <option value="Main">Main</option>
+                    <option value="Appetizer">Appetizer</option>
+                    <option value="Drink">Drink</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex gap-4">
+                <button type="submit" className="flex-1 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-bold text-lg transition shadow-lg shadow-orange-950">
+                  {newItem.id ? 'Update Item' : 'Publish to Menu Matrix'}
+                </button>
+                {newItem.id && (
+                  <button type="button" onClick={() => setNewItem({ item_name: '', description: '', price: '', category: 'Main' })} className="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-lg font-bold transition">Cancel</button>
+                )}
+              </div>
+            </form>
+          </div>
+
+          <div className="bg-gray-900 p-8 rounded-2xl border border-gray-800">
+            <h2 className="text-2xl font-black text-orange-400 mb-6">📋 Current Menu Inventory</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {menu.length === 0 ? (
+                <p className="text-gray-500 col-span-2 text-center py-4 italic">No items found in the menu.</p>
+              ) : (
+                menu.map(item => (
+                  <div key={item.id} className="p-4 bg-gray-950 rounded-xl border border-gray-800 flex justify-between items-center group">
+                    <div>
+                      <h4 className="font-bold text-white group-hover:text-orange-400 transition-colors">{item.item_name}</h4>
+                      <p className="text-xs text-gray-500">{item.category} • <span className="text-emerald-500 font-bold">₹{item.price}</span></p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => { setNewItem(item); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="p-2 text-blue-400 hover:bg-blue-900/30 rounded transition" title="Edit">✏️</button>
+                      <button onClick={() => deleteMenuItem(item.id)} className="p-2 text-red-400 hover:bg-red-900/30 rounded transition" title="Delete">🗑️</button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
-            <button type="submit" className="w-full py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-bold text-lg transition shadow-lg shadow-orange-950">Publish to Menu Matrix</button>
-          </form>
+          </div>
         </div>
       )}
 
@@ -243,7 +297,10 @@ export default function AdminDashboard() {
                 <form onSubmit={handleAddMenuItem} className="space-y-3">
                   <input type="text" placeholder="Item Name" value={newItem.item_name} onChange={e => setNewItem({...newItem, item_name: e.target.value})} className="w-full bg-gray-950 border border-gray-800 rounded p-2 text-sm text-white focus:outline-none focus:border-orange-500" />
                   <input type="number" step="0.01" placeholder="Price (₹)" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} className="w-full bg-gray-950 border border-gray-800 rounded p-2 text-sm text-white focus:outline-none focus:border-orange-500" />
-                  <button type="submit" className="w-full py-2 bg-orange-600 hover:bg-orange-700 text-white rounded text-sm font-bold transition">Quick Add</button>
+                  <button type="submit" className="w-full py-2 bg-orange-600 hover:bg-orange-700 text-white rounded text-sm font-bold transition">
+                    {newItem.id ? 'Update Item' : 'Quick Add'}
+                  </button>
+                  {newItem.id && <button type="button" onClick={() => setNewItem({ item_name: '', description: '', price: '', category: 'Main' })} className="w-full py-1 text-gray-500 hover:text-white text-[10px] uppercase font-bold tracking-widest transition">Cancel Edit</button>}
                 </form>
               </section>
 
