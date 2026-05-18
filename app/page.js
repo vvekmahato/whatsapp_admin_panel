@@ -7,9 +7,10 @@ export default function AdminDashboard() {
   const [reservations, setReservations] = useState([]);
   const [feedback, setFeedback] = useState([]);
   const [menu, setMenu] = useState([]);
-  const [newItem, setNewItem] = useState({ item_name: '', description: '', price: '', category: 'Main' });
+  const [newItem, setNewItem] = useState({ item_name: '', description: '', price: '', category: 'Main', is_available: true });
   const [isRefreshing, setIsRefreshing] = useState(false);
-  
+  const [isLoadingMenu, setIsLoadingMenu] = useState(true);
+
   // View states: 'dashboard' (split view), 'orders_focus' (full screen orders), 'menu_focus' (full screen menu)
   const [activeView, setActiveView] = useState('dashboard');
 
@@ -31,9 +32,17 @@ export default function AdminDashboard() {
       })
       .subscribe();
 
+    const menuSubscription = supabase
+      .channel('realtime-menu')
+      .on('postgres_changes', { event: '*', pattern: 'public', table: 'menu' }, () => {
+        fetchInitialData();
+      })
+      .subscribe();
+
     return () => {
       supabase.removeChannel(orderSubscription);
       supabase.removeChannel(reservationSubscription);
+      supabase.removeChannel(menuSubscription);
     };
   }, []);
 
@@ -46,15 +55,21 @@ export default function AdminDashboard() {
   }
 
   async function fetchInitialData() {
-    const { data: orderData } = await supabase.from('orders').select('*, customers(name, phone_number)').order('created_at', { ascending: false });
-    const { data: resData } = await supabase.from('reservations').select('*, customers(name, phone_number)').order('reservation_date', { ascending: true });
-    const { data: feedData } = await supabase.from('feedback').select('*, customers(name)').order('created_at', { ascending: false });
-    const { data: menuData } = await supabase.from('menu').select('*').order('category', { ascending: true });
+    try {
+      setIsLoadingMenu(true);
+      const { data: orderData } = await supabase.from('orders').select('*, customers(name, phone_number)').order('created_at', { ascending: false });
+      const { data: resData } = await supabase.from('reservations').select('*, customers(name, phone_number)').order('reservation_date', { ascending: true });
+      const { data: feedData } = await supabase.from('feedback').select('*, customers(name)').order('created_at', { ascending: false });
+      const { data: menuData, error: menuError } = await supabase.from('menu').select('*').order('category', { ascending: true });
 
-    if (orderData) setOrders(orderData);
-    if (resData) setReservations(resData);
-    if (feedData) setFeedback(feedData);
-    if (menuData) setMenu(menuData);
+      if (menuError) console.error("Menu fetch error:", menuError);
+      if (orderData) setOrders(orderData);
+      if (resData) setReservations(resData);
+      if (feedData) setFeedback(feedData);
+      if (menuData) setMenu(menuData);
+    } finally {
+      setIsLoadingMenu(false);
+    }
   }
 
   async function updateOrderStatus(orderId, newStatus) {
@@ -70,7 +85,8 @@ export default function AdminDashboard() {
       item_name: newItem.item_name, 
       description: newItem.description, 
       price: parseFloat(newItem.price), 
-      category: newItem.category 
+      category: newItem.category,
+      is_available: newItem.is_available 
     };
 
     let error;
@@ -84,7 +100,7 @@ export default function AdminDashboard() {
       alert(error.message);
     } else {
       alert(newItem.id ? `Updated "${newItem.item_name}"` : `🎉 "${newItem.item_name}" is now live!`);
-      setNewItem({ item_name: '', description: '', price: '', category: 'Main' });
+      setNewItem({ item_name: '', description: '', price: '', category: 'Main', is_available: true });
       fetchInitialData();
     }
   }
@@ -181,6 +197,16 @@ export default function AdminDashboard() {
                   </select>
                 </div>
               </div>
+              <div className="flex items-center gap-2">
+                <input 
+                  type="checkbox" 
+                  id="is_available" 
+                  checked={newItem.is_available} 
+                  onChange={e => setNewItem({...newItem, is_available: e.target.checked})} 
+                  className="w-5 h-5 accent-orange-500 rounded bg-gray-950 border-gray-800"
+                />
+                <label htmlFor="is_available" className="text-sm text-gray-300 font-bold">Item is Available for Orders</label>
+              </div>
               <div className="flex gap-4">
                 <button type="submit" className="flex-1 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-bold text-lg transition shadow-lg shadow-orange-950">
                   {newItem.id ? 'Update Item' : 'Publish to Menu Matrix'}
@@ -195,7 +221,9 @@ export default function AdminDashboard() {
           <div className="bg-gray-900 p-8 rounded-2xl border border-gray-800">
             <h2 className="text-2xl font-black text-orange-400 mb-6">📋 Current Menu Inventory</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {menu.length === 0 ? (
+              {isLoadingMenu ? (
+                <p className="text-gray-500 col-span-2 text-center py-4 italic animate-pulse">Loading menu items...</p>
+              ) : menu.length === 0 ? (
                 <p className="text-gray-500 col-span-2 text-center py-4 italic">No items found in the menu.</p>
               ) : (
                 menu.map(item => (
@@ -203,6 +231,9 @@ export default function AdminDashboard() {
                     <div>
                       <h4 className="font-bold text-white group-hover:text-orange-400 transition-colors">{item.item_name}</h4>
                       <p className="text-xs text-gray-500">{item.category} • <span className="text-emerald-500 font-bold">₹{item.price}</span></p>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase ${item.is_available ? 'bg-emerald-900/30 text-emerald-500' : 'bg-red-900/30 text-red-500'}`}>
+                        {item.is_available ? 'Available' : 'Sold Out'}
+                      </span>
                     </div>
                     <div className="flex gap-2">
                       <button onClick={() => { setNewItem(item); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="p-2 text-blue-400 hover:bg-blue-900/30 rounded transition" title="Edit">✏️</button>
@@ -300,8 +331,30 @@ export default function AdminDashboard() {
                   <button type="submit" className="w-full py-2 bg-orange-600 hover:bg-orange-700 text-white rounded text-sm font-bold transition">
                     {newItem.id ? 'Update Item' : 'Quick Add'}
                   </button>
-                  {newItem.id && <button type="button" onClick={() => setNewItem({ item_name: '', description: '', price: '', category: 'Main' })} className="w-full py-1 text-gray-500 hover:text-white text-[10px] uppercase font-bold tracking-widest transition">Cancel Edit</button>}
-                </form>
+                  {newItem.id && <button type="button" onClick={() => setNewItem({ item_name: '', description: '', price: '', category: 'Main', is_available: true })} className="w-full py-1 text-gray-500 hover:text-white text-[10px] uppercase font-bold tracking-widest transition">Cancel Edit</button>}
+              </form>
+
+              {/* Mini Menu Inventory Preview */}
+              <div className="mt-6 pt-6 border-t border-gray-800">
+                <h3 className="text-xs font-bold text-gray-500 mb-3 uppercase tracking-widest">Active Menu Inventory</h3>
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                  {isLoadingMenu ? (
+                    <p className="text-xs text-gray-600 italic py-2">Fetching...</p>
+                  ) : menu.length === 0 ? (
+                    <p className="text-xs text-gray-600 italic py-2">No items listed in menu yet.</p>
+                  ) : (
+                    menu.map(item => (
+                      <div key={item.id} className="p-2.5 bg-gray-950 rounded border border-gray-800 flex justify-between items-center group">
+                        <div className="truncate pr-2">
+                          <p className={`text-xs font-bold truncate ${item.is_available ? 'text-gray-200' : 'text-gray-600 line-through'}`}>{item.item_name}</p>
+                          <p className="text-[10px] text-emerald-500 font-bold">₹{item.price}</p>
+                        </div>
+                        <button onClick={() => { setNewItem(item); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="text-[10px] font-black text-blue-400 hover:text-blue-300 transition px-2 py-1 bg-blue-900/20 rounded">EDIT</button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
               </section>
 
               <section className="bg-gray-900 p-6 rounded-xl border border-gray-800 shadow-md">
